@@ -1,0 +1,180 @@
+"use client";
+
+import Link from "next/link";
+import { useMemo, useState } from "react";
+import { firmarSolicitud, revisarSolicitud } from "@/app/actions";
+import { StatusBadge } from "@/components/StatusBadge";
+import { labelTipoSolicitud } from "@/lib/solicitud-tipo-labels";
+import type { ProcesoEstadoFiltro, SolicitudFiltros, SolicitudListRow } from "@/lib/solicitudes-filters";
+import { facultadFromDetalle, nombreSolicitante, rowMatchesSolicitudFilters } from "@/lib/solicitudes-filters";
+
+const ESTADOS_PROCESO: ReadonlyArray<{ value: ProcesoEstadoFiltro; label: string }> = [
+  { value: "", label: "Todos los procesos" },
+  { value: "en_borrador", label: "Borrador" },
+  { value: "en_revision_secretaria", label: "En revision (Secretaria)" },
+  { value: "pendiente_aprobacion_decano", label: "Pendiente aprobacion (Decano)" },
+  { value: "aprobada", label: "Aprobadas por Decano" },
+  { value: "rechazada", label: "Rechazadas por Decano" }
+];
+
+function emptyFilters(): SolicitudFiltros {
+  return { nombre: "", facultad: "", fechaDesde: "", fechaHasta: "", estado: "" };
+}
+
+type Props = Readonly<{
+  rows: SolicitudListRow[];
+  puedeRevisar: boolean;
+  puedeAprobar: boolean;
+}>;
+
+export function ProcesoSolicitudesFilterTable({ rows, puedeRevisar, puedeAprobar }: Props) {
+  const [f, setF] = useState<SolicitudFiltros>(emptyFilters);
+
+  const filtered = useMemo(() => rows.filter((r) => rowMatchesSolicitudFilters(r, f)), [rows, f]);
+
+  return (
+    <>
+      <article className="card" style={{ marginBottom: "1rem" }}>
+        <h2 className="page-header__title" style={{ fontSize: "1rem", margin: "0 0 0.75rem" }}>
+          Filtros
+        </h2>
+        <div className="solicitud-filters">
+          <div>
+            <label htmlFor="pf-nombre">Nombre solicitante</label>
+            <input
+              id="pf-nombre"
+              value={f.nombre}
+              onChange={(e) => setF((p) => ({ ...p, nombre: e.target.value }))}
+              placeholder="Apellido o nombre..."
+            />
+          </div>
+          <div>
+            <label htmlFor="pf-fac">Facultad / unidad</label>
+            <input
+              id="pf-fac"
+              value={f.facultad}
+              onChange={(e) => setF((p) => ({ ...p, facultad: e.target.value }))}
+              placeholder="Desde detalle de la solicitud"
+            />
+          </div>
+          <div>
+            <label htmlFor="pf-desde">Fecha desde</label>
+            <input
+              id="pf-desde"
+              type="date"
+              value={f.fechaDesde}
+              onChange={(e) => setF((p) => ({ ...p, fechaDesde: e.target.value }))}
+            />
+          </div>
+          <div>
+            <label htmlFor="pf-hasta">Fecha hasta</label>
+            <input
+              id="pf-hasta"
+              type="date"
+              value={f.fechaHasta}
+              onChange={(e) => setF((p) => ({ ...p, fechaHasta: e.target.value }))}
+            />
+          </div>
+          <div className="solicitud-filters__span2">
+            <label htmlFor="pf-estado">Proceso / estado</label>
+            <select
+              id="pf-estado"
+              value={f.estado}
+              onChange={(e) => setF((p) => ({ ...p, estado: e.target.value as ProcesoEstadoFiltro }))}
+            >
+              {ESTADOS_PROCESO.map((o) => (
+                <option key={o.value || "all"} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+        <p className="field-hint" style={{ marginTop: "0.75rem", marginBottom: 0 }}>
+          Mostrando {filtered.length} de {rows.length}. El rango de fechas se cruza con el periodo de cada
+          solicitud.
+        </p>
+      </article>
+
+      <article className="card card--flat">
+        <div className="table-wrap">
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>Solicitante</th>
+                <th>Tipo</th>
+                <th>Periodo</th>
+                <th>Estado</th>
+                <th>Facultad</th>
+                <th>Motivo</th>
+                <th>Justificativo</th>
+                <th>Acciones</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.length === 0 ? (
+                <tr>
+                  <td colSpan={8} style={{ textAlign: "center", color: "var(--color-text-muted)" }}>
+                    No hay solicitudes con estos filtros.
+                  </td>
+                </tr>
+              ) : (
+                filtered.map((s) => (
+                  <tr key={s.id}>
+                    <td>
+                      <span className="text-truncate">{nombreSolicitante(s) || "—"}</span>
+                    </td>
+                    <td>{labelTipoSolicitud(s.tipo)}</td>
+                    <td>
+                      {s.fecha_inicio} - {s.fecha_fin}
+                    </td>
+                    <td>
+                      <StatusBadge estado={s.estado} />
+                    </td>
+                    <td>
+                      <span className="text-truncate">{facultadFromDetalle(s) || "—"}</span>
+                    </td>
+                    <td>
+                      <span className="text-truncate">{s.motivo}</span>
+                    </td>
+                    <td>
+                      <span className="text-truncate">{s.justificativo_nombre || "-"}</span>
+                    </td>
+                    <td>
+                      <div className="cell-actions">
+                        <Link href={`/solicitudes/${s.id}`} className="btn btn--secondary btn--sm">
+                          Ver
+                        </Link>
+                        {puedeRevisar && s.estado === "en_revision_secretaria" ? (
+                          <form action={revisarSolicitud.bind(null, s.id, "Revisado por secretaría.")}>
+                            <button className="btn btn--secondary btn--sm" type="submit">
+                              Enviar a Decano
+                            </button>
+                          </form>
+                        ) : null}
+                        {puedeAprobar && s.estado === "pendiente_aprobacion_decano" ? (
+                          <>
+                            <form action={firmarSolicitud.bind(null, s.id, true, "Aprobado y firmado por Decano.")}>
+                              <button className="btn btn--success btn--sm" type="submit">
+                                Aprobar
+                              </button>
+                            </form>
+                            <form action={firmarSolicitud.bind(null, s.id, false, "Rechazado por Decano.")}>
+                              <button className="btn btn--danger btn--sm" type="submit">
+                                Rechazar
+                              </button>
+                            </form>
+                          </>
+                        ) : null}
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </article>
+    </>
+  );
+}
