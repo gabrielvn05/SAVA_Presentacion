@@ -1,12 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { firmarSolicitud, revisarSolicitud } from "@/app/actions";
+import { PaginationControls } from "@/components/PaginationControls";
 import { StatusBadge } from "@/components/StatusBadge";
 import { labelTipoSolicitud } from "@/lib/solicitud-tipo-labels";
 import type { ProcesoEstadoFiltro, SolicitudFiltros, SolicitudListRow } from "@/lib/solicitudes-filters";
 import { facultadFromDetalle, nombreSolicitante, rowMatchesSolicitudFilters } from "@/lib/solicitudes-filters";
+
+const PAGE_SIZE = 10;
 
 const ESTADOS_PROCESO: ReadonlyArray<{ value: ProcesoEstadoFiltro; label: string }> = [
   { value: "", label: "Todos los procesos" },
@@ -29,8 +32,22 @@ type Props = Readonly<{
 
 export function ProcesoSolicitudesFilterTable({ rows, puedeRevisar, puedeAprobar }: Props) {
   const [f, setF] = useState<SolicitudFiltros>(emptyFilters);
+  const [page, setPage] = useState(1);
 
   const filtered = useMemo(() => rows.filter((r) => rowMatchesSolicitudFilters(r, f)), [rows, f]);
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const paginated = useMemo(() => {
+    const start = (page - 1) * PAGE_SIZE;
+    return filtered.slice(start, start + PAGE_SIZE);
+  }, [filtered, page]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [f]);
+
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages);
+  }, [page, totalPages]);
 
   return (
     <>
@@ -91,14 +108,14 @@ export function ProcesoSolicitudesFilterTable({ rows, puedeRevisar, puedeAprobar
           </div>
         </div>
         <p className="field-hint" style={{ marginTop: "0.75rem", marginBottom: 0 }}>
-          Mostrando {filtered.length} de {rows.length}. El rango de fechas se cruza con el periodo de cada
-          solicitud.
+          {filtered.length} solicitud{filtered.length === 1 ? "" : "es"} encontrada{filtered.length === 1 ? "" : "s"} de{" "}
+          {rows.length}. Se muestran {PAGE_SIZE} por página.
         </p>
       </article>
 
       <article className="card card--flat">
         <div className="table-wrap">
-          <table className="data-table">
+          <table className="data-table data-table--compact">
             <thead>
               <tr>
                 <th>Solicitante</th>
@@ -119,7 +136,7 @@ export function ProcesoSolicitudesFilterTable({ rows, puedeRevisar, puedeAprobar
                   </td>
                 </tr>
               ) : (
-                filtered.map((s) => (
+                paginated.map((s) => (
                   <tr key={s.id}>
                     <td>
                       <span className="text-truncate">{nombreSolicitante(s) || "—"}</span>
@@ -174,6 +191,13 @@ export function ProcesoSolicitudesFilterTable({ rows, puedeRevisar, puedeAprobar
             </tbody>
           </table>
         </div>
+        <PaginationControls
+          page={page}
+          totalPages={totalPages}
+          totalItems={filtered.length}
+          pageSize={PAGE_SIZE}
+          onPageChange={setPage}
+        />
       </article>
     </>
   );

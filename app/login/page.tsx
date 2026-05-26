@@ -22,12 +22,33 @@ async function login(formData: FormData) {
   redirect("/dashboard");
 }
 
+async function loginWithMicrosoft() {
+  "use server";
+
+  const supabase = createSupabaseServerClient();
+  const redirectTo = `${process.env.NEXT_PUBLIC_APP_URL}/auth/callback`;
+
+  const { data, error } = await supabase.auth.signInWithOAuth({
+    provider: "azure",
+    options: {
+      redirectTo
+    }
+  });
+
+  if (error || !data?.url) {
+    redirect("/login?error=oauth");
+  }
+
+  redirect(data.url);
+}
+
 type LoginPageProps = Readonly<{
   searchParams: Record<string, string | string[] | undefined>;
 }>;
 
 export default function LoginPage({ searchParams }: LoginPageProps) {
   const hasError = searchParams.error === "1";
+  const hasOAuthError = searchParams.error === "oauth";
   const solicitudOk = searchParams.solicitud === "ok";
 
   return (
@@ -57,11 +78,23 @@ export default function LoginPage({ searchParams }: LoginPageProps) {
             </div>
           ) : null}
 
+          {hasOAuthError ? (
+            <div className="alert alert--error" role="alert">
+              No se pudo iniciar sesión con Microsoft 365. Intenta de nuevo o contacta al administrador.
+            </div>
+          ) : null}
+
           {solicitudOk ? (
             <div className="alert alert--warning" role="status">
               Solicitud enviada. El Decano revisará tu pedido; cuando sea aprobado podrás iniciar sesión con el correo indicado.
             </div>
           ) : null}
+
+          <form action={loginWithMicrosoft}>
+            <button className="btn btn--secondary" type="submit" style={{ width: "100%" }}>
+              Ingresar con Microsoft 365
+            </button>
+          </form>
 
           <form action={login} className="stack">
             <div>

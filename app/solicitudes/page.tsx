@@ -55,9 +55,11 @@ export default async function SolicitudesPage() {
         title="Mis solicitudes"
         subtitle="Aquí aparecen únicamente las solicitudes que tú registraste. Si eres Secretaría o Decano, usa “Proceso de aprobación” para ver el resto."
         actions={
-          <Link href="/solicitudes/nueva" className="btn btn--primary">
-            Nueva solicitud
-          </Link>
+          <div className="page-header__actions">
+            <Link href="/solicitudes/nueva" className="btn btn--primary btn--sm">
+              Nueva solicitud
+            </Link>
+          </div>
         }
       />
       {error ? (

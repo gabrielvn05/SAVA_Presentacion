@@ -59,7 +59,7 @@ export default async function ProcesoAprobacionPage() {
         title="Proceso de aprobación"
         subtitle="Bandeja institucional: aquí ves solicitudes de todos los usuarios y avanzas el flujo (Secretaría → Decanato). Tus propias solicitudes también aparecen en “Mis solicitudes”."
         actions={
-          <div className="row" style={{ gap: 8 }}>
+          <div className="page-header__actions">
             <Link href="/solicitudes" className="btn btn--secondary btn--sm">
               Mis solicitudes
             </Link>

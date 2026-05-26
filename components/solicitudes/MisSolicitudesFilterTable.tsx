@@ -1,11 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { PaginationControls } from "@/components/PaginationControls";
 import { StatusBadge } from "@/components/StatusBadge";
 import { labelTipoSolicitud } from "@/lib/solicitud-tipo-labels";
 import type { ProcesoEstadoFiltro, SolicitudFiltros, SolicitudListRow } from "@/lib/solicitudes-filters";
 import { facultadFromDetalle, rowMatchesSolicitudFilters } from "@/lib/solicitudes-filters";
+
+const PAGE_SIZE = 10;
 
 const ESTADOS_PROCESO: ReadonlyArray<{ value: ProcesoEstadoFiltro; label: string }> = [
   { value: "", label: "Todos los procesos" },
@@ -22,8 +25,22 @@ function emptyFilters(): SolicitudFiltros {
 
 export function MisSolicitudesFilterTable({ rows }: Readonly<{ rows: SolicitudListRow[] }>) {
   const [f, setF] = useState<SolicitudFiltros>(emptyFilters);
+  const [page, setPage] = useState(1);
 
   const filtered = useMemo(() => rows.filter((r) => rowMatchesSolicitudFilters(r, f)), [rows, f]);
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const paginated = useMemo(() => {
+    const start = (page - 1) * PAGE_SIZE;
+    return filtered.slice(start, start + PAGE_SIZE);
+  }, [filtered, page]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [f]);
+
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages);
+  }, [page, totalPages]);
 
   return (
     <>
@@ -84,14 +101,14 @@ export function MisSolicitudesFilterTable({ rows }: Readonly<{ rows: SolicitudLi
           </div>
         </div>
         <p className="field-hint" style={{ marginTop: "0.75rem", marginBottom: 0 }}>
-          Mostrando {filtered.length} de {rows.length} solicitudes. La facultad se toma del campo en el detalle
-          (facultad, unidad, etc.) si existe.
+          {filtered.length} solicitud{filtered.length === 1 ? "" : "es"} encontrada{filtered.length === 1 ? "" : "s"} de{" "}
+          {rows.length}. Se muestran {PAGE_SIZE} por página.
         </p>
       </article>
 
       <article className="card card--flat">
         <div className="table-wrap">
-          <table className="data-table">
+          <table className="data-table data-table--compact">
             <thead>
               <tr>
                 <th>Tipo</th>
@@ -111,7 +128,7 @@ export function MisSolicitudesFilterTable({ rows }: Readonly<{ rows: SolicitudLi
                   </td>
                 </tr>
               ) : (
-                filtered.map((s) => (
+                paginated.map((s) => (
                   <tr key={s.id}>
                     <td>{labelTipoSolicitud(s.tipo)}</td>
                     <td>
@@ -145,6 +162,13 @@ export function MisSolicitudesFilterTable({ rows }: Readonly<{ rows: SolicitudLi
             </tbody>
           </table>
         </div>
+        <PaginationControls
+          page={page}
+          totalPages={totalPages}
+          totalItems={filtered.length}
+          pageSize={PAGE_SIZE}
+          onPageChange={setPage}
+        />
       </article>
     </>
   );

@@ -1,4 +1,5 @@
 import { ReactNode } from "react";
+import { AppFooter } from "@/components/AppFooter";
 import { AppShellChrome } from "@/components/AppShellChrome";
 import type { SidebarNavItem } from "@/components/sidebar-nav-types";
 import type { AppRole, UserProfile } from "@/lib/auth";
@@ -70,9 +71,7 @@ export function AppShell({ profile, userEmail, children }: AppShellProps) {
       >
         <div className="app-shell__body">
           <main className="app-main">{children}</main>
-          <footer className="app-footer">
-            <span>Sistema academico - Modulo de tramites</span>
-          </footer>
+          <AppFooter />
         </div>
       </AppShellChrome>
     </div>
