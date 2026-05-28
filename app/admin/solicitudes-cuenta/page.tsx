@@ -10,8 +10,9 @@ export default async function SolicitudesCuentaPage() {
   const profile = await getUserProfile(user.id);
   const esDecano = profile.rol === "decano";
   const esSecretaria = profile.rol === "secretaria";
+  const esSuper = profile.rol === "superusuario";
 
-  if (!esDecano && !esSecretaria) {
+  if (!esDecano && !esSecretaria && !esSuper) {
     return (
       <section className="stack">
         <PageHeader title="Solicitudes de cuenta" subtitle="Modulo reservado para Decano y Secretaria." />
@@ -45,7 +46,7 @@ export default async function SolicitudesCuentaPage() {
     <section className="stack">
       <PageHeader
         title="Solicitudes de cuenta"
-        subtitle="Aprueba o rechaza solicitudes para crear usuarios. Al aprobar se genera una contraseña temporal."
+        subtitle="Rechaza solicitudes o, si eres superusuario, aprueba y crea la cuenta con contraseña temporal."
       />
 
       {error ? (
@@ -59,7 +60,7 @@ export default async function SolicitudesCuentaPage() {
           </div>
         </article>
       ) : null}
-      {!error && data.length === 0 && totalSolicitudes > 0 ? (
+      {!error && data.length === 0 && (totalSolicitudes ?? 0) > 0 ? (
         <article className="card" style={{ borderLeft: "4px solid var(--color-warning)" }}>
           <p className="field-hint" style={{ margin: 0 }}>
             Se detectaron {totalSolicitudes} registros en BD ({pendientes} pendientes), pero no se renderizaron en esta
@@ -114,7 +115,7 @@ export default async function SolicitudesCuentaPage() {
                       <div className="cell-actions">
                         {r.status === "pendiente" ? (
                           <>
-                            {esDecano ? (
+                            {esSuper ? (
                               <form action={aprobarSolicitudCuenta}>
                                 <input type="hidden" name="request_id" value={r.id} />
                                 <button className="btn btn--success btn--sm" type="submit">

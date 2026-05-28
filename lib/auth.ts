@@ -23,7 +23,7 @@ type RequireAuthOptions = {
 
 const ROLE_DEFAULT_CAPABILITIES: Record<AppRole, Capability[]> = {
   superusuario: ["gestionar_usuarios", "revisar_solicitudes", "aprobar_solicitudes", "generar_solicitudes"],
-  decano: ["gestionar_usuarios", "revisar_solicitudes", "aprobar_solicitudes", "generar_solicitudes"],
+  decano: ["revisar_solicitudes", "aprobar_solicitudes", "generar_solicitudes"],
   secretaria: ["revisar_solicitudes", "generar_solicitudes"],
   administrativo: ["generar_solicitudes"]
 };

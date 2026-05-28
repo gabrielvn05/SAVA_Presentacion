@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getUserProfile, hasCapability, requireAuth } from "@/lib/auth";
+import { estadoTrasRevisionSecretaria } from "@/lib/solicitud-workflow";
 import { redirect } from "next/navigation";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { validateFechaInicioMaxTresMeses } from "@/lib/fechas";
@@ -112,18 +113,33 @@ export async function actualizarSolicitud(id: string, formData: FormData) {
   redirect("/solicitudes");
 }
 
-export async function revisarSolicitud(id: string, observacion: string) {
+export async function revisarSolicitud(id: string, aprobado: boolean, observacion: string) {
   const { user } = await requireAuth();
   const puedeRevisar = await hasCapability(user.id, "revisar_solicitudes");
   if (!puedeRevisar) throw new Error("No tienes permisos para revisar.");
 
   const admin = createSupabaseAdminClient();
+  const { data: solicitud, error: solErr } = await admin.from("solicitudes").select("creado_por").eq("id", id).single();
+  if (solErr || !solicitud) throw new Error("No se encontró la solicitud.");
+
+  const creador = await getUserProfile(solicitud.creado_por);
+  if (solicitud.creado_por === user.id) {
+    throw new Error("No puedes revisar una solicitud creada por ti mismo.");
+  }
+
+  const nuevoEstado = estadoTrasRevisionSecretaria(creador.rol, aprobado);
+  const ahora = new Date().toISOString();
+
   const { error } = await admin
     .from("solicitudes")
     .update({
-      estado: "pendiente_aprobacion_decano",
+      estado: nuevoEstado,
       revisado_por: user.id,
-      observaciones_secretaria: observacion || null
+      observaciones_secretaria: observacion || null,
+      ...(nuevoEstado === "aprobada"
+        ? { firmado_por: user.id, fecha_firma: ahora, observaciones_decano: observacion || null }
+        : {}),
+      ...(nuevoEstado === "rechazada" ? { observaciones_decano: observacion || null } : {})
     })
     .eq("id", id);
 
@@ -138,6 +154,12 @@ export async function firmarSolicitud(id: string, aprobado: boolean, observacion
   if (!puedeAprobar) throw new Error("No tienes permisos para aprobar.");
 
   const admin = createSupabaseAdminClient();
+  const { data: solicitud, error: solErr } = await admin.from("solicitudes").select("creado_por").eq("id", id).single();
+  if (solErr || !solicitud) throw new Error("No se encontró la solicitud.");
+  if (solicitud.creado_por === user.id) {
+    throw new Error("No puedes firmar una solicitud creada por ti mismo.");
+  }
+
   const { error } = await admin
     .from("solicitudes")
     .update({
@@ -155,8 +177,10 @@ export async function firmarSolicitud(id: string, aprobado: boolean, observacion
 
 export async function crearUsuarioInterno(formData: FormData) {
   const { user } = await requireAuth();
-  const puedeGestionar = await hasCapability(user.id, "gestionar_usuarios");
-  if (!puedeGestionar) throw new Error("Solo Decano puede crear usuarios.");
+  const profile = await getUserProfile(user.id);
+  if (profile.rol !== "superusuario") {
+    throw new Error("Solo el superusuario puede crear usuarios.");
+  }
 
   const supabase = createSupabaseAdminClient();
   const email = getTextField(formData, "email");
@@ -189,8 +213,10 @@ export async function crearUsuarioInterno(formData: FormData) {
 
 export async function delegarCapacidad(formData: FormData) {
   const { user } = await requireAuth();
-  const puedeGestionar = await hasCapability(user.id, "gestionar_usuarios");
-  if (!puedeGestionar) throw new Error("Solo Decano puede delegar.");
+  const profile = await getUserProfile(user.id);
+  if (profile.rol !== "superusuario") {
+    throw new Error("Solo el superusuario puede delegar capacidades.");
+  }
 
   const supabase = createSupabaseServerClient();
   const userId = getTextField(formData, "user_id");
@@ -257,8 +283,8 @@ export async function solicitarCuenta(formData: FormData) {
 export async function aprobarSolicitudCuenta(formData: FormData) {
   const { user } = await requireAuth();
   const profile = await getUserProfile(user.id);
-  if (profile.rol !== "decano" && profile.rol !== "superusuario") {
-    throw new Error("Solo Decano puede aprobar solicitudes de cuenta.");
+  if (profile.rol !== "superusuario") {
+    throw new Error("Solo el superusuario puede aprobar solicitudes de cuenta y crear usuarios.");
   }
 
   const requestId = getTextField(formData, "request_id");

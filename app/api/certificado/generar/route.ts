@@ -1,7 +1,10 @@
 import { NextResponse } from "next/server";
 import { createSupabaseRouteHandlerClient } from "@/lib/supabase/route";
 import { validateFechaInicioMaxTresMeses } from "@/lib/fechas";
-import { buildCertificadoPdfBuffer, type CertificadoTipo } from "@/lib/certificado/build-certificado-pdf";
+import { buildCertificadoPdf, type CertificadoTipo } from "@/lib/certificado/build-certificado-pdf";
+import { fetchDecanoOficioDestinatario } from "@/lib/certificado/fetch-decano-oficio";
+import { resolveSolicitanteCertificado } from "@/lib/certificado/resolve-solicitante";
+import { parseTipoPersonal } from "@/lib/certificado/tipo-personal";
 
 export const runtime = "nodejs";
 
@@ -18,23 +21,15 @@ export async function POST(req: Request) {
   } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "No autenticado." }, { status: 401 });
 
-  const { data: profile } = await supabase.from("profiles").select("nombres, apellidos, email").eq("id", user.id).maybeSingle();
-
-  const md = (user.user_metadata ?? {}) as Record<string, unknown>;
-  const solicitante = profile
-    ? { nombres: profile.nombres, apellidos: profile.apellidos, email: profile.email }
-    : {
-        nombres: String(md.nombres ?? md.name ?? "Usuario"),
-        apellidos: String(md.apellidos ?? md.family_name ?? ""),
-        email: user.email ?? null
-      };
-
   const body = (await req.json()) as {
     tipo?: unknown;
     fecha_inicio?: unknown;
     fecha_fin?: unknown;
     motivo?: unknown;
     detalle?: unknown;
+    solicitante_nombres?: unknown;
+    solicitante_apellidos?: unknown;
+    tipo_personal?: unknown;
   };
 
   if (!isTipo(body.tipo)) return NextResponse.json({ error: "Tipo inválido." }, { status: 400 });
@@ -51,22 +46,54 @@ export async function POST(req: Request) {
   const fechaIniErr = validateFechaInicioMaxTresMeses(fecha_inicio);
   if (fechaIniErr) return NextResponse.json({ error: fechaIniErr }, { status: 400 });
 
-  if (fecha_fin < fecha_inicio) return NextResponse.json({ error: "La fecha fin debe ser mayor o igual a la fecha inicio." }, { status: 400 });
+  if (fecha_fin < fecha_inicio) {
+    return NextResponse.json({ error: "La fecha fin debe ser mayor o igual a la fecha inicio." }, { status: 400 });
+  }
 
-  const pdf = await buildCertificadoPdfBuffer({
-    solicitante: { nombres: solicitante.nombres, apellidos: solicitante.apellidos, email: solicitante.email },
-    tipo: body.tipo,
-    fecha_inicio,
-    fecha_fin,
-    motivo,
-    detalle
-  });
+  const md = (user.user_metadata ?? {}) as Record<string, unknown>;
+  let solicitante = await resolveSolicitanteCertificado(user.id, user.email, md);
+
+  const overrideNombres = typeof body.solicitante_nombres === "string" ? body.solicitante_nombres.trim() : "";
+  const overrideApellidos = typeof body.solicitante_apellidos === "string" ? body.solicitante_apellidos.trim() : "";
+  if (overrideNombres) {
+    solicitante = {
+      nombres: overrideNombres,
+      apellidos: overrideApellidos,
+      email: solicitante.email
+    };
+  }
+
+  const nombreCompleto = `${solicitante.nombres} ${solicitante.apellidos}`.trim();
+  if (!nombreCompleto) {
+    return NextResponse.json(
+      { error: "No se encontró el nombre del solicitante en su perfil. Contacte al administrador." },
+      { status: 400 }
+    );
+  }
+
+  const tipoPersonal = parseTipoPersonal(body.tipo_personal ?? detalle.tipo_personal);
+  const detalleConPersonal = { ...detalle, tipo_personal: tipoPersonal };
+
+  const destinatario = await fetchDecanoOficioDestinatario();
+  const { buffer: pdf, source } = await buildCertificadoPdf(
+    {
+      solicitante: { nombres: solicitante.nombres, apellidos: solicitante.apellidos, email: solicitante.email },
+      tipo: body.tipo,
+      tipo_personal: tipoPersonal,
+      fecha_inicio,
+      fecha_fin,
+      motivo,
+      detalle: detalleConPersonal
+    },
+    destinatario
+  );
 
   return new NextResponse(pdf, {
     status: 200,
     headers: {
       "Content-Type": "application/pdf",
-      "Content-Disposition": 'inline; filename="certificado-justificacion.pdf"'
+      "Content-Disposition": 'inline; filename="certificado-justificacion.pdf"',
+      "X-Sava-Pdf-Source": source
     }
   });
 }

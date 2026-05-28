@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { LoginForm } from "@/components/auth/LoginForm";
+import { LoginMicrosoftButton } from "@/components/auth/LoginMicrosoftButton";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 
@@ -64,7 +66,7 @@ export default function LoginPage({ searchParams }: LoginPageProps) {
         <p>Gestión de permisos y justificaciones</p>
       </aside>
       <div className="login-panel">
-        <div className="card stack login-card">
+        <div className="card stack login-card" id="contenido-principal" tabIndex={-1}>
           <div>
             <h2 style={{ margin: 0, fontSize: "1.35rem" }}>Iniciar sesión</h2>
             <p className="field-hint" style={{ margin: "0.4rem 0 0" }}>
@@ -90,32 +92,9 @@ export default function LoginPage({ searchParams }: LoginPageProps) {
             </div>
           ) : null}
 
-          <form action={loginWithMicrosoft}>
-            <button className="btn btn--secondary" type="submit" style={{ width: "100%" }}>
-              Ingresar con Microsoft 365
-            </button>
-          </form>
+          <LoginMicrosoftButton loginWithMicrosoft={loginWithMicrosoft} />
 
-          <form action={login} className="stack">
-            <div>
-              <label htmlFor="email">Correo institucional</label>
-              <input id="email" name="email" type="email" placeholder="usuario@institucion.edu" required autoComplete="email" />
-            </div>
-            <div>
-              <label htmlFor="password">Contraseña</label>
-              <input
-                id="password"
-                name="password"
-                type="password"
-                placeholder="••••••••"
-                required
-                autoComplete="current-password"
-              />
-            </div>
-            <button className="btn btn--primary" type="submit" style={{ width: "100%" }}>
-              Entrar al sistema
-            </button>
-          </form>
+          <LoginForm loginAction={login} />
 
           <div className="login-signup-cta">
             <p className="login-signup-cta__label">¿No tienes cuenta todavía?</p>

@@ -78,7 +78,12 @@ export default async function ProcesoAprobacionPage() {
         </article>
       ) : null}
 
-      <ProcesoSolicitudesFilterTable rows={rows} puedeRevisar={puedeRevisar} puedeAprobar={puedeAprobar} />
+      <ProcesoSolicitudesFilterTable
+        rows={rows}
+        puedeRevisar={puedeRevisar}
+        puedeAprobar={puedeAprobar}
+        userId={user.id}
+      />
     </section>
   );
 }

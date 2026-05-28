@@ -1,39 +1,42 @@
 import Link from "next/link";
 import { crearUsuarioInterno, delegarCapacidad } from "@/app/actions";
-import { hasCapability, requireAuth } from "@/lib/auth";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { getUserProfile, requireAuth } from "@/lib/auth";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { PageHeader } from "@/components/PageHeader";
 
 export default async function UsuariosPage() {
   const { user } = await requireAuth();
-  const puedeGestionar = await hasCapability(user.id, "gestionar_usuarios");
+  const profile = await getUserProfile(user.id);
 
-  if (!puedeGestionar) {
+  if (profile.rol !== "superusuario") {
     return (
       <section className="stack">
-        <PageHeader title="Usuarios" subtitle="Modulo reservado para Decano." />
+        <PageHeader title="Usuarios" subtitle="Módulo reservado para superusuario." />
         <article className="card">
-          <p>No tienes permiso para crear usuarios ni delegar funcionalidades.</p>
+          <p className="field-hint" style={{ margin: 0 }}>
+            Solo el superusuario puede crear usuarios y delegar capacidades. Las solicitudes de cuenta se gestionan en
+            el módulo correspondiente del Decanato o Secretaría.
+          </p>
         </article>
       </section>
     );
   }
 
-  const supabase = createSupabaseServerClient();
+  const admin = createSupabaseAdminClient();
   const [{ data: usuarios }, { count: pendientesCuenta = 0 }] = await Promise.all([
-    supabase.from("profiles").select("id, nombres, apellidos, email, rol, activo").order("created_at", { ascending: false }),
-    supabase.from("account_requests").select("*", { head: true, count: "exact" }).eq("status", "pendiente")
+    admin.from("profiles").select("id, nombres, apellidos, email, rol, activo").order("created_at", { ascending: false }),
+    admin.from("account_requests").select("*", { head: true, count: "exact" }).eq("status", "pendiente")
   ]);
 
   return (
     <section className="stack">
       <PageHeader
-        title="Administracion de usuarios"
-        subtitle={`Alta de cuentas y delegacion de capacidades. Solicitudes de cuenta pendientes: ${pendientesCuenta}.`}
+        title="Administración de usuarios"
+        subtitle={`Alta de cuentas y delegación de capacidades. Solicitudes de cuenta pendientes: ${pendientesCuenta}.`}
       />
       <article className="card row" style={{ justifyContent: "space-between" }}>
         <p className="field-hint" style={{ margin: 0 }}>
-          Las solicitudes enviadas desde login se aprueban en el modulo de solicitudes de cuenta.
+          Las solicitudes enviadas desde login las revisan Decano o Secretaría en solicitudes de cuenta.
         </p>
         <Link href="/admin/solicitudes-cuenta" className="btn btn--secondary btn--sm">
           Ir a solicitudes de cuenta
@@ -58,15 +61,15 @@ export default async function UsuariosPage() {
               <input id="email" name="email" type="email" placeholder="correo@institucion.edu" required />
             </div>
             <div>
-              <label htmlFor="password">Contrasena temporal</label>
-              <input id="password" name="password" type="password" placeholder="Minimo 6 caracteres" required />
+              <label htmlFor="password">Contraseña temporal</label>
+              <input id="password" name="password" type="password" placeholder="Mínimo 6 caracteres" required />
             </div>
           </div>
           <div>
             <label htmlFor="rol">Rol</label>
             <select id="rol" name="rol" defaultValue="administrativo">
               <option value="administrativo">Administrativo</option>
-              <option value="secretaria">Secretaria</option>
+              <option value="secretaria">Secretaría</option>
               <option value="decano">Decano</option>
               <option value="superusuario">Superusuario</option>
             </select>
@@ -110,28 +113,28 @@ export default async function UsuariosPage() {
 
       <article className="card card--flat">
         <div className="table-wrap">
-        <table className="data-table">
-          <thead>
-            <tr>
-              <th>Nombre</th>
-              <th>Email</th>
-              <th>Rol</th>
-              <th>Estado</th>
-            </tr>
-          </thead>
-          <tbody>
-            {(usuarios || []).map((u) => (
-              <tr key={u.id}>
-                <td>
-                  {u.nombres} {u.apellidos}
-                </td>
-                <td>{u.email}</td>
-                <td>{u.rol}</td>
-                <td>{u.activo ? <span className="badge badge--success">Activo</span> : <span className="badge badge--muted">Inactivo</span>}</td>
+          <table className="data-table data-table--compact">
+            <thead>
+              <tr>
+                <th>Nombre</th>
+                <th>Email</th>
+                <th>Rol</th>
+                <th>Estado</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {(usuarios || []).map((u) => (
+                <tr key={u.id}>
+                  <td>
+                    {u.nombres} {u.apellidos}
+                  </td>
+                  <td>{u.email}</td>
+                  <td>{u.rol}</td>
+                  <td>{u.activo ? <span className="badge badge--success">Activo</span> : <span className="badge badge--muted">Inactivo</span>}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       </article>
     </section>

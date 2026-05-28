@@ -1,5 +1,7 @@
 import "./globals.css";
 import { AppShell } from "@/components/AppShell";
+import { QualityProvider } from "@/components/quality/QualityProvider";
+import { SkipToMain } from "@/components/quality/SkipToMain";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getUserProfile } from "@/lib/auth";
 import { ReactNode } from "react";
@@ -21,13 +23,16 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
   return (
     <html lang="es">
       <body>
-        {user && profile ? (
-          <AppShell profile={profile} userEmail={user.email}>
-            {children}
-          </AppShell>
-        ) : (
-          <div className="app-public">{children}</div>
-        )}
+        <QualityProvider>
+          <SkipToMain />
+          {user && profile ? (
+            <AppShell profile={profile} userEmail={user.email}>
+              {children}
+            </AppShell>
+          ) : (
+            <div className="app-public">{children}</div>
+          )}
+        </QualityProvider>
       </body>
     </html>
   );

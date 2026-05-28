@@ -7,7 +7,9 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "seed": "node scripts/seed-test-users.cjs"
+    "seed": "node scripts/seed-test-users.cjs",
+    "setup:pdf": "npx playwright install chromium",
+    "setup:pdf:full": "powershell -ExecutionPolicy Bypass -File scripts/setup-pdf.ps1"
   },
   "dependencies": {
     "@signpdf/placeholder-plain": "^3.3.0",
@@ -16,19 +18,23 @@
     "@signpdf/utils": "^3.3.0",
     "@supabase/ssr": "0.5.2",
     "@supabase/supabase-js": "2.50.0",
+    "docxtemplater": "^3.68.7",
     "iconv-lite": "^0.6.3",
+    "libreoffice-convert": "^1.8.1",
     "next": "14.2.5",
     "node-forge": "^1.3.1",
     "nodemailer": "^7.0.3",
     "pdf-lib": "^1.17.1",
     "pdfkit": "^0.15.0",
+    "pizzip": "^3.2.0",
+    "playwright": "^1.52.0",
     "react": "18.2.0",
     "react-dom": "18.2.0"
   },
   "devDependencies": {
-    "@types/pdfkit": "^0.13.9",
-    "@types/nodemailer": "^6.4.17",
     "@types/node": "22.7.4",
+    "@types/nodemailer": "^6.4.17",
+    "@types/pdfkit": "^0.13.9",
     "@types/react": "18.2.0",
     "@types/react-dom": "18.2.0",
     "dotenv": "^16.4.5",

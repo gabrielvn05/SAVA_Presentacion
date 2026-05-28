@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import { DateInput } from "@/components/ui/DateInput";
 import { PaginationControls } from "@/components/PaginationControls";
 import { StatusBadge } from "@/components/StatusBadge";
 import { labelTipoSolicitud } from "@/lib/solicitud-tipo-labels";
@@ -69,18 +70,16 @@ export function MisSolicitudesFilterTable({ rows }: Readonly<{ rows: SolicitudLi
           </div>
           <div>
             <label htmlFor="f-desde">Fecha desde</label>
-            <input
+            <DateInput
               id="f-desde"
-              type="date"
               value={f.fechaDesde}
               onChange={(e) => setF((p) => ({ ...p, fechaDesde: e.target.value }))}
             />
           </div>
           <div>
             <label htmlFor="f-hasta">Fecha hasta</label>
-            <input
+            <DateInput
               id="f-hasta"
-              type="date"
               value={f.fechaHasta}
               onChange={(e) => setF((p) => ({ ...p, fechaHasta: e.target.value }))}
             />

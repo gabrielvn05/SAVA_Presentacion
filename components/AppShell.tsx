@@ -17,7 +17,11 @@ function buildSidebarItems(rol: AppRole): SidebarNavItem[] {
   const puedeProceso = rol === "secretaria" || rol === "decano";
 
   if (esSuper) {
-    return [{ type: "link", href: "/dashboard", label: "Inicio" }];
+    return [
+      { type: "link", href: "/dashboard", label: "Inicio" },
+      { type: "link", href: "/admin/usuarios", label: "Usuarios" },
+      { type: "link", href: "/admin/solicitudes-cuenta", label: "Solicitudes de cuenta" }
+    ];
   }
 
   const items: SidebarNavItem[] = [
@@ -34,9 +38,6 @@ function buildSidebarItems(rol: AppRole): SidebarNavItem[] {
 
   if (puedeProceso) {
     items.push({ type: "link", href: "/solicitudes/proceso-aprobacion", label: "Proceso de aprobación" });
-  }
-  if (esDecano) {
-    items.push({ type: "link", href: "/admin/usuarios", label: "Usuarios" });
   }
   if (esDecano || esSecretaria) {
     items.push({ type: "link", href: "/admin/solicitudes-cuenta", label: "Solicitudes de cuenta" });
@@ -70,7 +71,9 @@ export function AppShell({ profile, userEmail, children }: AppShellProps) {
         logoSrc="/branding/LOGO-ULEAM.png"
       >
         <div className="app-shell__body">
-          <main className="app-main">{children}</main>
+          <main id="contenido-principal" className="app-main" tabIndex={-1}>
+            {children}
+          </main>
           <AppFooter />
         </div>
       </AppShellChrome>

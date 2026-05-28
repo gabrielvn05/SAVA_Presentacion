@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { firmarSolicitud, revisarSolicitud } from "@/app/actions";
+import { DateInput } from "@/components/ui/DateInput";
 import { PaginationControls } from "@/components/PaginationControls";
 import { StatusBadge } from "@/components/StatusBadge";
 import { labelTipoSolicitud } from "@/lib/solicitud-tipo-labels";
@@ -28,9 +29,10 @@ type Props = Readonly<{
   rows: SolicitudListRow[];
   puedeRevisar: boolean;
   puedeAprobar: boolean;
+  userId: string;
 }>;
 
-export function ProcesoSolicitudesFilterTable({ rows, puedeRevisar, puedeAprobar }: Props) {
+export function ProcesoSolicitudesFilterTable({ rows, puedeRevisar, puedeAprobar, userId }: Props) {
   const [f, setF] = useState<SolicitudFiltros>(emptyFilters);
   const [page, setPage] = useState(1);
 
@@ -76,18 +78,16 @@ export function ProcesoSolicitudesFilterTable({ rows, puedeRevisar, puedeAprobar
           </div>
           <div>
             <label htmlFor="pf-desde">Fecha desde</label>
-            <input
+            <DateInput
               id="pf-desde"
-              type="date"
               value={f.fechaDesde}
               onChange={(e) => setF((p) => ({ ...p, fechaDesde: e.target.value }))}
             />
           </div>
           <div>
             <label htmlFor="pf-hasta">Fecha hasta</label>
-            <input
+            <DateInput
               id="pf-hasta"
-              type="date"
               value={f.fechaHasta}
               onChange={(e) => setF((p) => ({ ...p, fechaHasta: e.target.value }))}
             />
@@ -162,14 +162,21 @@ export function ProcesoSolicitudesFilterTable({ rows, puedeRevisar, puedeAprobar
                         <Link href={`/solicitudes/${s.id}`} className="btn btn--secondary btn--sm">
                           Ver
                         </Link>
-                        {puedeRevisar && s.estado === "en_revision_secretaria" ? (
-                          <form action={revisarSolicitud.bind(null, s.id, "Revisado por secretaría.")}>
-                            <button className="btn btn--secondary btn--sm" type="submit">
-                              Enviar a Decano
-                            </button>
-                          </form>
+                        {puedeRevisar && s.estado === "en_revision_secretaria" && s.creado_por !== userId ? (
+                          <>
+                            <form action={revisarSolicitud.bind(null, s.id, true, "Aprobado en revisión de Secretaría.")}>
+                              <button className="btn btn--success btn--sm" type="submit">
+                                Aprobar
+                              </button>
+                            </form>
+                            <form action={revisarSolicitud.bind(null, s.id, false, "Rechazado en revisión de Secretaría.")}>
+                              <button className="btn btn--danger btn--sm" type="submit">
+                                Rechazar
+                              </button>
+                            </form>
+                          </>
                         ) : null}
-                        {puedeAprobar && s.estado === "pendiente_aprobacion_decano" ? (
+                        {puedeAprobar && s.estado === "pendiente_aprobacion_decano" && s.creado_por !== userId ? (
                           <>
                             <form action={firmarSolicitud.bind(null, s.id, true, "Aprobado y firmado por Decano.")}>
                               <button className="btn btn--success btn--sm" type="submit">

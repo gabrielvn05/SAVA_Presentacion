@@ -4,8 +4,11 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { PageHeader } from "@/components/PageHeader";
+import { DateInput } from "@/components/ui/DateInput";
 import { crearSolicitudDesdeWizard } from "@/app/actions";
+import { useQualityTask } from "@/lib/quality/use-quality-task";
 import { addDaysISO, isoDateUTC, threeMonthsAgoUTC, validateFechaInicioMaxTresMeses } from "@/lib/fechas";
+import { labelTipoPersonal, TIPOS_PERSONAL_OPCIONES, type TipoPersonal } from "@/lib/certificado/tipo-personal";
 
 type Tipo = "enfermedad" | "viaje" | "calamidad_domestica" | "falta_marcado";
 
@@ -19,13 +22,13 @@ type Meta = Readonly<{
 const TIPOS: ReadonlyArray<Readonly<{ id: Tipo; title: string; description: string }>> = [
   {
     id: "enfermedad",
-    title: "Certificado médico",
-    description: "Para justificar inasistencias por enfermedad. Debes completar los datos clínicos y adjuntar el certificado PDF generado."
+    title: "Cita médica / certificado de salud",
+    description: "Para justificar ausencia por enfermedad o cita médica (según tu rol: docente, administrativo o mantenimiento)."
   },
   {
     id: "viaje",
     title: "Permiso por viaje",
-    description: "Para seminarios, congresos u otras actividades académicas fuera de la ciudad o país."
+    description: "Para trámites académicos (congresos, capacitaciones) o personales fuera de la ciudad o país."
   },
   {
     id: "calamidad_domestica",
@@ -74,6 +77,7 @@ function Field({
 export function JustificacionWizard() {
   const router = useRouter();
   const minFecha = useMemo(() => isoDateUTC(threeMonthsAgoUTC()), []);
+  const qualitySolicitud = useQualityTask("wizard:crear-solicitud");
 
   const [step, setStep] = useState<0 | 1 | 2>(0);
   const [tipo, setTipo] = useState<Tipo | null>(null);
@@ -83,18 +87,44 @@ export function JustificacionWizard() {
   const [pdfBlob, setPdfBlob] = useState<Blob | null>(null);
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [firmado, setFirmado] = useState(false);
+  const [pdfSource, setPdfSource] = useState<"libreoffice" | "playwright" | "pdfkit" | null>(null);
 
   const [p12, setP12] = useState<File | null>(null);
   const [p12pass, setP12pass] = useState("");
 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [perfilDocente, setPerfilDocente] = useState<{
+    nombres: string;
+    apellidos: string;
+    nombre_completo: string;
+    tipo_personal?: TipoPersonal;
+  } | null>(null);
 
   useEffect(() => {
     return () => {
       if (pdfUrl) URL.revokeObjectURL(pdfUrl);
     };
   }, [pdfUrl]);
+
+  useEffect(() => {
+    fetch("/api/perfil", { credentials: "include" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => {
+        if (j?.nombre_completo) {
+          setPerfilDocente({
+            nombres: j.nombres ?? "",
+            apellidos: j.apellidos ?? "",
+            nombre_completo: j.nombre_completo,
+            tipo_personal: j.tipo_personal
+          });
+          if (j.tipo_personal) {
+            setF((prev) => ({ ...prev, tipo_personal: j.tipo_personal }));
+          }
+        }
+      })
+      .catch(() => undefined);
+  }, []);
 
   function patchField(key: string, value: string) {
     setF((prev) => ({ ...prev, [key]: value }));
@@ -106,8 +136,15 @@ export function JustificacionWizard() {
     return v;
   }
 
+  function datosInstitucionales() {
+    const tipo_personal = requireText("tipo_personal", "Tipo de personal") as TipoPersonal;
+    const cedula = requireText("cedula", "Cédula");
+    return { tipo_personal, cedula };
+  }
+
   function buildMeta(): Meta {
     if (!tipo) throw new Error("Selecciona un tipo de solicitud.");
+    const { tipo_personal, cedula } = datosInstitucionales();
 
     if (tipo === "enfermedad") {
       const fecha_inasistencia = requireText("fecha_inasistencia", "Fecha de inasistencia");
@@ -126,6 +163,8 @@ export function JustificacionWizard() {
       const fecha_fin = dias > 0 ? addDaysISO(fecha_inasistencia, dias) : fecha_inasistencia;
 
       const detalle: Record<string, unknown> = {
+        tipo_personal,
+        cedula,
         fecha_inasistencia,
         institucion_medica,
         medico_tratante,
@@ -148,15 +187,27 @@ export function JustificacionWizard() {
       const err = validateFechaInicioMaxTresMeses(fecha_inasistencia);
       if (err) throw new Error(err);
 
+      const motivo_viaje_clase = requireText("motivo_viaje_clase", "Tipo de permiso por viaje");
       const destino = requireText("destino", "Destino");
       const fecha_inicio_viaje = requireText("fecha_inicio_viaje", "Fecha de inicio (viaje)");
       const fecha_fin_viaje = requireText("fecha_fin_viaje", "Fecha de fin (viaje)");
       const motivo_viaje = requireText("motivo_viaje", "Motivo del viaje");
+      const esAcademico = motivo_viaje_clase === "academico";
 
       if (fecha_fin_viaje < fecha_inicio_viaje) throw new Error("Las fechas del viaje no son válidas.");
+      if (esAcademico && !(f.institucion_organizadora ?? "").trim()) {
+        throw new Error(
+          tipo_personal === "docente"
+            ? "Para viaje académico debes indicar la institución organizadora."
+            : "Para comisión institucional debes indicar la institución organizadora."
+        );
+      }
 
       const detalle: Record<string, unknown> = {
+        tipo_personal,
+        cedula,
         fecha_inasistencia,
+        motivo_viaje_clase,
         destino,
         institucion_organizadora: (f.institucion_organizadora ?? "").trim(),
         fecha_inicio_viaje,
@@ -165,10 +216,11 @@ export function JustificacionWizard() {
         observaciones: (f.observaciones ?? "").trim()
       };
 
+      const etiquetaClase = esAcademico ? "académico" : "personal";
       return {
         fecha_inicio: fecha_inicio_viaje,
         fecha_fin: fecha_fin_viaje,
-        motivo: `Permiso por viaje: ${destino}`,
+        motivo: `Permiso por viaje (${etiquetaClase}): ${destino}`,
         detalle
       };
     }
@@ -182,6 +234,8 @@ export function JustificacionWizard() {
       const descripcion = requireText("descripcion", "Descripción");
 
       const detalle: Record<string, unknown> = {
+        tipo_personal,
+        cedula,
         fecha_inasistencia,
         tipo_calamidad,
         descripcion,
@@ -205,6 +259,8 @@ export function JustificacionWizard() {
     const motivo_olvido = requireText("motivo_olvido", "Motivo del olvido");
 
     const detalle: Record<string, unknown> = {
+      tipo_personal,
+      cedula,
       fecha_inasistencia,
       fecha_marcado,
       hora_aproximada: (f.hora_aproximada ?? "").trim(),
@@ -235,13 +291,23 @@ export function JustificacionWizard() {
           fecha_inicio: nextMeta.fecha_inicio,
           fecha_fin: nextMeta.fecha_fin,
           motivo: nextMeta.motivo,
-          detalle: nextMeta.detalle
+          detalle: nextMeta.detalle,
+          solicitante_nombres: perfilDocente?.nombres ?? "",
+          solicitante_apellidos: perfilDocente?.apellidos ?? "",
+          tipo_personal: f.tipo_personal || perfilDocente?.tipo_personal || "docente"
         })
       });
 
       if (!res.ok) {
         const j = (await res.json().catch(() => null)) as { error?: string } | null;
         throw new Error(j?.error || "No se pudo generar el certificado PDF.");
+      }
+
+      const source = res.headers.get("X-Sava-Pdf-Source");
+      if (source === "libreoffice" || source === "playwright" || source === "pdfkit") {
+        setPdfSource(source);
+      } else {
+        setPdfSource(null);
       }
 
       const blob = await res.blob();
@@ -251,6 +317,44 @@ export function JustificacionWizard() {
         if (prev) URL.revokeObjectURL(prev);
         return URL.createObjectURL(blob);
       });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function descargarDocx() {
+    if (!tipo || !meta) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/certificado/generar-docx", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          tipo,
+          fecha_inicio: meta.fecha_inicio,
+          fecha_fin: meta.fecha_fin,
+          motivo: meta.motivo,
+          detalle: meta.detalle,
+          solicitante_nombres: perfilDocente?.nombres ?? "",
+          solicitante_apellidos: perfilDocente?.apellidos ?? "",
+          tipo_personal: f.tipo_personal || perfilDocente?.tipo_personal || "docente"
+        })
+      });
+      if (!res.ok) {
+        const j = (await res.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(j?.error || "No se pudo generar el Word.");
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "oficio-justificacion.docx";
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Error al descargar Word.");
     } finally {
       setBusy(false);
     }
@@ -296,6 +400,7 @@ export function JustificacionWizard() {
     if (!tipo || !meta || !pdfBlob) return;
     setBusy(true);
     setError(null);
+    qualitySolicitud.start();
     try {
       const fd = new FormData();
       fd.append("tipo", tipo);
@@ -310,9 +415,13 @@ export function JustificacionWizard() {
       const res = await crearSolicitudDesdeWizard(fd);
       if (!res.ok) {
         setError(res.error);
+        qualitySolicitud.complete(false);
         return;
       }
+      qualitySolicitud.complete(true);
       router.push("/solicitudes");
+    } catch {
+      qualitySolicitud.complete(false);
     } finally {
       setBusy(false);
     }
@@ -393,10 +502,48 @@ export function JustificacionWizard() {
             {tipoSeleccionado?.description} La fecha de inasistencia no puede ser anterior a {minFecha} (ventana de 3 meses).
           </p>
 
+          {perfilDocente ? (
+            <p className="field-hint" style={{ marginTop: 0, fontWeight: 600, color: "var(--color-text)" }}>
+              El oficio se generará a nombre de: {perfilDocente.nombre_completo}
+              {f.tipo_personal ? ` (${labelTipoPersonal(f.tipo_personal as TipoPersonal)})` : ""}
+            </p>
+          ) : null}
+
           <div className="stack">
-            <Field label="Fecha de inasistencia *" hint="Se valida contra la fecha actual (máximo 3 meses hacia atrás).">
-              <input type="date" value={f.fecha_inasistencia ?? ""} min={minFecha} onChange={(e) => patchField("fecha_inasistencia", e.target.value)} required />
+            <Field label="Usted es *" hint="Define el texto del oficio (docente, administrativo o mantenimiento).">
+              <select
+                value={f.tipo_personal ?? ""}
+                onChange={(e) => patchField("tipo_personal", e.target.value)}
+                required
+              >
+                <option value="">Seleccionar</option>
+                {TIPOS_PERSONAL_OPCIONES.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </select>
             </Field>
+            {f.tipo_personal ? (
+              <p className="field-hint" style={{ marginTop: "-0.5rem" }}>
+                {TIPOS_PERSONAL_OPCIONES.find((o) => o.value === f.tipo_personal)?.hint}
+              </p>
+            ) : null}
+
+          <div className="form-grid form-grid--2">
+            <Field label="Fecha de inasistencia *" hint="Se valida contra la fecha actual (máximo 3 meses hacia atrás).">
+              <DateInput
+                value={f.fecha_inasistencia ?? ""}
+                min={minFecha}
+                onChange={(e) => patchField("fecha_inasistencia", e.target.value)}
+                required
+              />
+            </Field>
+
+            <Field label="Cédula *">
+              <input value={f.cedula ?? ""} onChange={(e) => patchField("cedula", e.target.value)} placeholder="Ej: 1234567890" required />
+            </Field>
+          </div>
 
             {tipo === "enfermedad" ? (
               <>
@@ -417,7 +564,7 @@ export function JustificacionWizard() {
                     <input value={f.medico_tratante ?? ""} onChange={(e) => patchField("medico_tratante", e.target.value)} placeholder="Dr. Juan Pérez" required />
                   </Field>
                   <Field label="Fecha de emisión del certificado *">
-                    <input type="date" value={f.fecha_emision_certificado ?? ""} onChange={(e) => patchField("fecha_emision_certificado", e.target.value)} required />
+                    <DateInput value={f.fecha_emision_certificado ?? ""} onChange={(e) => patchField("fecha_emision_certificado", e.target.value)} required />
                   </Field>
                   <Field label="Días de reposo" hint="Si no aplica, déjalo vacío (se usará el mismo día de la inasistencia).">
                     <input value={f.dias_reposo ?? ""} onChange={(e) => patchField("dias_reposo", e.target.value)} placeholder="Ej: 3" inputMode="numeric" />
@@ -436,22 +583,41 @@ export function JustificacionWizard() {
               <>
                 <hr style={{ border: 0, borderTop: "1px solid var(--color-border)" }} />
                 <h3 style={{ margin: 0 }}>Datos del permiso por viaje</h3>
+                <Field label="Tipo de permiso *">
+                  <select
+                    value={f.motivo_viaje_clase ?? ""}
+                    onChange={(e) => patchField("motivo_viaje_clase", e.target.value)}
+                    required
+                  >
+                    <option value="">Seleccionar</option>
+                    <option value="academico">
+                      {f.tipo_personal === "docente"
+                        ? "Académico (congreso, capacitación, evento institucional)"
+                        : "Comisión o actividad institucional"}
+                    </option>
+                    <option value="personal">Personal (motivos particulares)</option>
+                  </select>
+                </Field>
                 <div className="form-grid form-grid--2">
                   <Field label="Destino *">
                     <input value={f.destino ?? ""} onChange={(e) => patchField("destino", e.target.value)} placeholder="Ej: Quito, Ecuador" required />
                   </Field>
-                  <Field label="Institución organizadora">
+                  <Field
+                    label={f.motivo_viaje_clase === "academico" ? "Institución organizadora *" : "Institución organizadora"}
+                    hint={f.motivo_viaje_clase === "personal" ? "Opcional para viaje personal." : undefined}
+                  >
                     <input
                       value={f.institucion_organizadora ?? ""}
                       onChange={(e) => patchField("institucion_organizadora", e.target.value)}
                       placeholder="Ej: Universidad Central"
+                      required={f.motivo_viaje_clase === "academico"}
                     />
                   </Field>
                   <Field label="Fecha de inicio *">
-                    <input type="date" value={f.fecha_inicio_viaje ?? ""} onChange={(e) => patchField("fecha_inicio_viaje", e.target.value)} required />
+                    <DateInput value={f.fecha_inicio_viaje ?? ""} onChange={(e) => patchField("fecha_inicio_viaje", e.target.value)} required />
                   </Field>
                   <Field label="Fecha de fin *">
-                    <input type="date" value={f.fecha_fin_viaje ?? ""} onChange={(e) => patchField("fecha_fin_viaje", e.target.value)} required />
+                    <DateInput value={f.fecha_fin_viaje ?? ""} onChange={(e) => patchField("fecha_fin_viaje", e.target.value)} required />
                   </Field>
                 </div>
                 <Field label="Motivo del viaje *">
@@ -492,7 +658,7 @@ export function JustificacionWizard() {
                 <h3 style={{ margin: 0 }}>Datos de justificación de marcado</h3>
                 <div className="form-grid form-grid--2">
                   <Field label="Fecha del marcado *">
-                    <input type="date" value={f.fecha_marcado ?? ""} onChange={(e) => patchField("fecha_marcado", e.target.value)} required />
+                    <DateInput value={f.fecha_marcado ?? ""} onChange={(e) => patchField("fecha_marcado", e.target.value)} required />
                   </Field>
                   <Field label="Hora aproximada">
                     <input type="time" value={f.hora_aproximada ?? ""} onChange={(e) => patchField("hora_aproximada", e.target.value)} />
@@ -550,13 +716,29 @@ export function JustificacionWizard() {
               <strong>.p12</strong> (no guardamos el certificado ni la contraseña en base de datos), y finalmente enviarlo al flujo de Secretaría/Decanato.
             </p>
 
+            {pdfSource === "pdfkit" ? (
+              <div className="alert alert--warning" role="status">
+                El PDF es una <strong>versión simplificada</strong> porque falta el motor de conversión. Para el formato
+                institucional completo, ejecuta en la carpeta del proyecto:{" "}
+                <code>npm run setup:pdf:full</code> (o instala LibreOffice) y reinicia el servidor. También puedes descargar el{" "}
+                <strong>Word (.docx)</strong>, que sí usa la plantilla original.
+              </div>
+            ) : pdfSource === "playwright" ? (
+              <div className="alert alert--warning" role="status" style={{ background: "#ecfdf5", borderColor: "#6ee7b7" }}>
+                PDF generado con formato institucional (navegador). Si necesitas el archivo idéntico al Word, descarga el .docx.
+              </div>
+            ) : null}
+
             <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
               <button className="btn btn--secondary btn--sm" type="button" disabled={!pdfUrl || busy} onClick={() => generarPdf(meta)}>
                 Regenerar PDF
               </button>
+              <button className="btn btn--secondary btn--sm" type="button" disabled={busy} onClick={() => descargarDocx()}>
+                Descargar Word (.docx)
+              </button>
               {pdfUrl ? (
                 <a className="btn btn--secondary btn--sm" href={pdfUrl} download="certificado-justificacion.pdf">
-                  Descargar
+                  Descargar PDF
                 </a>
               ) : null}
             </div>

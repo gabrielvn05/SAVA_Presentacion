@@ -149,16 +149,11 @@ export default async function DashboardPage() {
 
         {profile.rol === "decano" ? (
           <article className="card dashboard-tile stack" style={{ borderLeftColor: "var(--color-accent)" }}>
-            <h2 style={{ margin: 0 }}>Usuarios y solicitudes de cuenta</h2>
-            <p className="field-hint">Solicitudes de cuenta pendientes: {stats.solicitudesCuentaPendientes}</p>
-            <div className="row">
-              <Link href="/admin/usuarios" className="btn btn--secondary btn--sm" style={{ width: "fit-content" }}>
-                Gestionar usuarios
-              </Link>
-              <Link href="/admin/solicitudes-cuenta" className="btn btn--primary btn--sm" style={{ width: "fit-content" }}>
-                Revisar solicitudes
-              </Link>
-            </div>
+            <h2 style={{ margin: 0 }}>Solicitudes de cuenta</h2>
+            <p className="field-hint">Pendientes por revisar: {stats.solicitudesCuentaPendientes}</p>
+            <Link href="/admin/solicitudes-cuenta" className="btn btn--primary btn--sm" style={{ width: "fit-content" }}>
+              Revisar solicitudes
+            </Link>
           </article>
         ) : null}
 
