@@ -1383,7 +1383,7 @@ label {
 
 .password-input-wrap__input {
   flex: 1;
-  padding-right: 4.25rem;
+  padding-right: 3rem;
   min-height: 2.75rem;
 }
 
@@ -1392,16 +1392,17 @@ label {
   right: 0.35rem;
   top: 50%;
   transform: translateY(-50%);
-  border: 1px solid var(--color-border);
-  background: #f4f6fa;
-  color: var(--color-primary);
-  font-size: 0.75rem;
-  font-weight: 600;
-  padding: 0.35rem 0.55rem;
+  border: none;
+  background: transparent;
+  color: var(--color-text-muted);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.35rem;
   border-radius: 6px;
   cursor: pointer;
-  min-height: 2rem;
-  min-width: 2.75rem;
+  min-height: 2.25rem;
+  min-width: 2.25rem;
 }
 
 .password-input-wrap__toggle:hover {

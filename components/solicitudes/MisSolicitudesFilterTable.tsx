@@ -7,7 +7,7 @@ import { PaginationControls } from "@/components/PaginationControls";
 import { StatusBadge } from "@/components/StatusBadge";
 import { labelTipoSolicitud } from "@/lib/solicitud-tipo-labels";
 import type { ProcesoEstadoFiltro, SolicitudFiltros, SolicitudListRow } from "@/lib/solicitudes-filters";
-import { facultadFromDetalle, rowMatchesSolicitudFilters } from "@/lib/solicitudes-filters";
+import { rolFromSolicitud, rowMatchesSolicitudFilters } from "@/lib/solicitudes-filters";
 
 const PAGE_SIZE = 10;
 
@@ -21,7 +21,7 @@ const ESTADOS_PROCESO: ReadonlyArray<{ value: ProcesoEstadoFiltro; label: string
 ];
 
 function emptyFilters(): SolicitudFiltros {
-  return { nombre: "", facultad: "", fechaDesde: "", fechaHasta: "", estado: "" };
+  return { nombre: "", rol: "", fechaDesde: "", fechaHasta: "", estado: "" };
 }
 
 export function MisSolicitudesFilterTable({ rows }: Readonly<{ rows: SolicitudListRow[] }>) {
@@ -60,12 +60,12 @@ export function MisSolicitudesFilterTable({ rows }: Readonly<{ rows: SolicitudLi
             />
           </div>
           <div>
-            <label htmlFor="f-fac">Facultad / unidad (detalle)</label>
+            <label htmlFor="f-rol">Rol</label>
             <input
-              id="f-fac"
-              value={f.facultad}
-              onChange={(e) => setF((p) => ({ ...p, facultad: e.target.value }))}
-              placeholder="Ej. Ciencias..."
+              id="f-rol"
+              value={f.rol}
+              onChange={(e) => setF((p) => ({ ...p, rol: e.target.value }))}
+              placeholder="Ej. Docente, Administrativo..."
             />
           </div>
           <div>
@@ -114,7 +114,7 @@ export function MisSolicitudesFilterTable({ rows }: Readonly<{ rows: SolicitudLi
                 <th>Periodo</th>
                 <th>Estado</th>
                 <th>Motivo</th>
-                <th>Facultad / detalle</th>
+                <th>Rol</th>
                 <th>Justificativo</th>
                 <th>Acciones</th>
               </tr>
@@ -140,7 +140,7 @@ export function MisSolicitudesFilterTable({ rows }: Readonly<{ rows: SolicitudLi
                       <span className="text-truncate">{s.motivo}</span>
                     </td>
                     <td>
-                      <span className="text-truncate">{facultadFromDetalle(s) || "—"}</span>
+                      <span className="text-truncate">{rolFromSolicitud(s) || "—"}</span>
                     </td>
                     <td>
                       <span className="text-truncate">{s.justificativo_nombre || "-"}</span>

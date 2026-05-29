@@ -28,6 +28,7 @@ export async function middleware(request: NextRequest) {
     await supabase.auth.signOut();
   }
 
+  response.headers.set("x-pathname", request.nextUrl.pathname);
   return response;
 }
 

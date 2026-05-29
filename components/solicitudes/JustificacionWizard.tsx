@@ -9,6 +9,7 @@ import { crearSolicitudDesdeWizard } from "@/app/actions";
 import { useQualityTask } from "@/lib/quality/use-quality-task";
 import { addDaysISO, isoDateUTC, threeMonthsAgoUTC, validateFechaInicioMaxTresMeses } from "@/lib/fechas";
 import { labelTipoPersonal, TIPOS_PERSONAL_OPCIONES, type TipoPersonal } from "@/lib/certificado/tipo-personal";
+import { validarAnexoObligatorio, validarAnexoOpcional } from "@/lib/certificado/merge-pdf-anexos";
 
 type Tipo = "enfermedad" | "viaje" | "calamidad_domestica" | "falta_marcado";
 
@@ -91,6 +92,7 @@ export function JustificacionWizard() {
 
   const [p12, setP12] = useState<File | null>(null);
   const [p12pass, setP12pass] = useState("");
+  const [anexo, setAnexo] = useState<File | null>(null);
 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -277,25 +279,44 @@ export function JustificacionWizard() {
     };
   }
 
+  function validarAnexoArchivo() {
+    if (!tipo) return null;
+    return (
+      validarAnexoObligatorio(tipo, anexo) ??
+      validarAnexoOpcional(anexo ? { size: anexo.size, type: anexo.type, name: anexo.name } : null)
+    );
+  }
+
   async function generarPdf(nextMeta: Meta) {
     if (!tipo) return;
+    const anexoErr = validarAnexoArchivo();
+    if (anexoErr) {
+      setError(anexoErr);
+      return;
+    }
+
     setBusy(true);
     setError(null);
     try {
+      const payload = {
+        tipo,
+        fecha_inicio: nextMeta.fecha_inicio,
+        fecha_fin: nextMeta.fecha_fin,
+        motivo: nextMeta.motivo,
+        detalle: nextMeta.detalle,
+        solicitante_nombres: perfilDocente?.nombres ?? "",
+        solicitante_apellidos: perfilDocente?.apellidos ?? "",
+        tipo_personal: f.tipo_personal || perfilDocente?.tipo_personal || "docente"
+      };
+
+      const fd = new FormData();
+      fd.append("payload", JSON.stringify(payload));
+      if (anexo) fd.append("anexo", anexo);
+
       const res = await fetch("/api/certificado/generar", {
         method: "POST",
         credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          tipo,
-          fecha_inicio: nextMeta.fecha_inicio,
-          fecha_fin: nextMeta.fecha_fin,
-          motivo: nextMeta.motivo,
-          detalle: nextMeta.detalle,
-          solicitante_nombres: perfilDocente?.nombres ?? "",
-          solicitante_apellidos: perfilDocente?.apellidos ?? "",
-          tipo_personal: f.tipo_personal || perfilDocente?.tipo_personal || "docente"
-        })
+        body: fd
       });
 
       if (!res.ok) {
@@ -470,6 +491,7 @@ export function JustificacionWizard() {
                 onClick={() => {
                   setTipo(t.id);
                   setF({});
+                  setAnexo(null);
                   setError(null);
                 }}
               >
@@ -679,6 +701,30 @@ export function JustificacionWizard() {
                 </Field>
               </>
             ) : null}
+
+            <hr style={{ border: 0, borderTop: "1px solid var(--color-border)" }} />
+            <h3 style={{ margin: 0 }}>Documento de respaldo</h3>
+            <Field
+              label={tipo === "enfermedad" ? "Adjuntar certificado o soporte *" : "Adjuntar documento de respaldo (opcional)"}
+              hint={
+                tipo === "enfermedad"
+                  ? "Obligatorio para cita médica. Se anexará al final del PDF generado (PDF, PNG o JPG)."
+                  : "Opcional. Si lo adjuntas, se incluirá al final del PDF generado (PDF, PNG o JPG)."
+              }
+            >
+              <input
+                className="file-input"
+                type="file"
+                accept=".pdf,.png,.jpg,.jpeg,application/pdf,image/png,image/jpeg"
+                required={tipo === "enfermedad"}
+                onChange={(e) => setAnexo(e.target.files?.[0] ?? null)}
+              />
+              {anexo ? (
+                <p className="field-hint" style={{ marginTop: "0.35rem" }}>
+                  Archivo seleccionado: <strong>{anexo.name}</strong>
+                </p>
+              ) : null}
+            </Field>
           </div>
 
           <div className="row" style={{ justifyContent: "space-between" }}>
@@ -692,6 +738,8 @@ export function JustificacionWizard() {
               onClick={async () => {
                 try {
                   const m = buildMeta();
+                  const anexoErr = validarAnexoArchivo();
+                  if (anexoErr) throw new Error(anexoErr);
                   setMeta(m);
                   setStep(2);
                   setError(null);

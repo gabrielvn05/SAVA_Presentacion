@@ -1,7 +1,6 @@
 import type { BuildCertificadoInput } from "@/lib/certificado/build-certificado-pdf";
 import { FACULTAD_DEFAULT } from "@/lib/certificado/constants";
 import type { buildOficioReplacements } from "@/lib/certificado/oficio-placeholders";
-import { buildParrafosOficio } from "@/lib/certificado/tipo-personal";
 
 function escapeXml(value: string) {
   return value
@@ -12,23 +11,23 @@ function escapeXml(value: string) {
     .replace(/'/g, "&apos;");
 }
 
-/** Párrafos como quedarían con la plantilla Word original (modelo docente). */
-export function buildPlantillaDocenteParagraphsFilled(
+function str(v: unknown) {
+  return v != null && String(v).trim() ? String(v).trim() : "—";
+}
+
+/** Texto fijo de la plantilla Word (solo modelo docente + enfermedad). */
+export function buildWordTemplateDocenteEnfermedadParagraphs(
   r: ReturnType<typeof buildOficioReplacements>,
-  input: BuildCertificadoInput
+  detalle: Record<string, unknown>
 ) {
-  const d = input.detalle;
-  return buildParrafosOficio({
-    tipoPersonal: "docente",
-    tipoTramite: input.tipo,
-    nombreCompleto: r.nombre_solicitante,
-    cedula: r.cedula,
-    facultad: FACULTAD_DEFAULT,
-    fechaInicio: r.fecha_inicio,
-    fechaFin: r.fecha_fin,
-    diasAusencia: r.dias_ausencia,
-    detalle: d
-  });
+  const facultad = FACULTAD_DEFAULT;
+  return {
+    cuerpo_parrafo_1: `Yo, ${r.nombre_solicitante}, portador de la cédula de identidad N° ${r.cedula}, docente de la ${facultad}, por medio del presente documento formal justifico mi ausencia a mis actividades académicas por razones de salud, conforme a los siguientes datos:`,
+    cuerpo_parrafo_2: `Período de la falta: desde el día ${r.fecha_inicio} hasta el día ${r.fecha_fin}, lo que corresponde a un total de ${r.dias_ausencia} días hábiles/calendario de ausencia.`,
+    cuerpo_parrafo_3: `Atención médica recibida: fui atendido(a) en ${str(detalle.institucion_medica)}, por el doctor(a) ${str(detalle.medico_tratante)} quien emitió el siguiente diagnóstico: ${str(detalle.diagnostico)}.`,
+    cuerpo_parrafo_4:
+      "Declaro bajo mi compromiso académico que la información aquí consignada es verídica y me comprometo a reincorporarme a mis labores en la fecha de retorno indicada, así como a realizar las gestiones de nivelación con mis estudiantes según lo establecido por la normativa institucional."
+  };
 }
 
 export function normalizeDocenteFrase(xml: string) {
@@ -44,7 +43,7 @@ export function swapDocxBodyForTipo(
   r: ReturnType<typeof buildOficioReplacements>,
   input: BuildCertificadoInput
 ) {
-  const plantilla = buildPlantillaDocenteParagraphsFilled(r, input);
+  const plantilla = buildWordTemplateDocenteEnfermedadParagraphs(r, input.detalle);
   let out = normalizeDocenteFrase(xml);
 
   if (input.tipo === "enfermedad" && r.tipo_personal === "docente") {

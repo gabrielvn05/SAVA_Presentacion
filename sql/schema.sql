@@ -294,13 +294,35 @@ with check (public.has_capability('gestionar_usuarios'));
 drop policy if exists capabilities_read_self on public.user_capabilities;
 create policy capabilities_read_self
 on public.user_capabilities for select
-using (user_id = auth.uid() or public.has_capability('gestionar_usuarios'));
+using (
+  user_id = auth.uid()
+  or exists (
+    select 1
+    from public.profiles p
+    where p.id = auth.uid()
+      and p.rol in ('decano', 'superusuario')
+  )
+);
 
 drop policy if exists capabilities_manage_decano on public.user_capabilities;
 create policy capabilities_manage_decano
 on public.user_capabilities for all
-using (public.has_capability('gestionar_usuarios'))
-with check (public.has_capability('gestionar_usuarios'));
+using (
+  exists (
+    select 1
+    from public.profiles p
+    where p.id = auth.uid()
+      and p.rol in ('decano', 'superusuario')
+  )
+)
+with check (
+  exists (
+    select 1
+    from public.profiles p
+    where p.id = auth.uid()
+      and p.rol in ('decano', 'superusuario')
+  )
+);
 
 -- Account requests policies
 drop policy if exists account_requests_insert_anon on public.account_requests;

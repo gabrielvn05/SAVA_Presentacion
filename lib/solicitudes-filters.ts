@@ -1,3 +1,5 @@
+import { labelTipoPersonal, parseTipoPersonal } from "@/lib/certificado/tipo-personal";
+
 export type SolicitudListRow = Readonly<{
   id: string;
   creado_por: string;
@@ -9,7 +11,7 @@ export type SolicitudListRow = Readonly<{
   justificativo_nombre: string | null;
   created_at: string;
   detalle: Record<string, unknown> | null;
-  profiles?: { nombres: string; apellidos: string; email?: string | null } | null;
+  profiles?: { nombres: string; apellidos: string; email?: string | null; rol?: string } | null;
 }>;
 
 export type ProcesoEstadoFiltro =
@@ -22,11 +24,18 @@ export type ProcesoEstadoFiltro =
 
 export type SolicitudFiltros = Readonly<{
   nombre: string;
-  facultad: string;
+  rol: string;
   fechaDesde: string;
   fechaHasta: string;
   estado: ProcesoEstadoFiltro;
 }>;
+
+const APP_ROLE_LABELS: Record<string, string> = {
+  superusuario: "Superusuario",
+  decano: "Decano",
+  secretaria: "Secretaría",
+  administrativo: "Administrativo"
+};
 
 export function nombreSolicitante(row: SolicitudListRow): string {
   const p = row.profiles;
@@ -36,13 +45,18 @@ export function nombreSolicitante(row: SolicitudListRow): string {
   return "";
 }
 
-export function facultadFromDetalle(row: SolicitudListRow): string {
+/** Rol de personal en el oficio (docente, administrativo, mantenimiento) o rol del sistema en perfil. */
+export function rolFromSolicitud(row: SolicitudListRow): string {
   const d = row.detalle;
-  if (!d || typeof d !== "object") return "";
-  const keys = ["facultad", "unidad", "facultad_academica", "dependencia"] as const;
-  for (const k of keys) {
-    const v = d[k];
-    if (typeof v === "string" && v.trim()) return v.trim();
+  if (d && typeof d === "object") {
+    const tp = d.tipo_personal;
+    if (typeof tp === "string" && tp.trim()) {
+      return labelTipoPersonal(parseTipoPersonal(tp));
+    }
+  }
+  const rolPerfil = (row.profiles as { rol?: string } | null | undefined)?.rol;
+  if (rolPerfil && typeof rolPerfil === "string") {
+    return APP_ROLE_LABELS[rolPerfil] ?? rolPerfil;
   }
   return "";
 }
@@ -60,9 +74,9 @@ export function rowMatchesSolicitudFilters(row: SolicitudListRow, f: SolicitudFi
   const qNombre = f.nombre.trim().toLowerCase();
   if (qNombre && !nombre.includes(qNombre) && !motivo.includes(qNombre)) return false;
 
-  const fac = facultadFromDetalle(row).toLowerCase();
-  const qFac = f.facultad.trim().toLowerCase();
-  if (qFac && !fac.includes(qFac)) return false;
+  const rol = rolFromSolicitud(row).toLowerCase();
+  const qRol = f.rol.trim().toLowerCase();
+  if (qRol && !rol.includes(qRol)) return false;
 
   if (!overlapsRange(row.fecha_inicio, row.fecha_fin, f.fechaDesde.trim(), f.fechaHasta.trim())) {
     return false;

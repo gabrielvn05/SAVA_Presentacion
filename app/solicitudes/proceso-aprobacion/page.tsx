@@ -47,7 +47,7 @@ export default async function ProcesoAprobacionPage() {
   const { data, error } = await admin
     .from("solicitudes")
     .select(
-      "id, creado_por, tipo, estado, fecha_inicio, fecha_fin, motivo, justificativo_nombre, created_at, detalle, profiles!solicitudes_creado_por_fkey(nombres, apellidos, email)"
+      "id, creado_por, tipo, estado, fecha_inicio, fecha_fin, motivo, justificativo_nombre, created_at, detalle, profiles!solicitudes_creado_por_fkey(nombres, apellidos, email, rol)"
     )
     .order("created_at", { ascending: false });
 

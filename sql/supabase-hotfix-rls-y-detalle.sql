@@ -1,6 +1,39 @@
 -- Ejecutar en Supabase SQL Editor si ves: "stack depth limit exceeded"
--- Causa: policies de user_capabilities llaman has_capability(), y has_capability()
+-- Causa: policies de user_capabilities llamaban has_capability(), y has_capability()
 -- consultaba user_capabilities bajo RLS -> recursión infinita.
+
+drop policy if exists capabilities_read_self on public.user_capabilities;
+create policy capabilities_read_self
+on public.user_capabilities for select
+using (
+  user_id = auth.uid()
+  or exists (
+    select 1
+    from public.profiles p
+    where p.id = auth.uid()
+      and p.rol in ('decano', 'superusuario')
+  )
+);
+
+drop policy if exists capabilities_manage_decano on public.user_capabilities;
+create policy capabilities_manage_decano
+on public.user_capabilities for all
+using (
+  exists (
+    select 1
+    from public.profiles p
+    where p.id = auth.uid()
+      and p.rol in ('decano', 'superusuario')
+  )
+)
+with check (
+  exists (
+    select 1
+    from public.profiles p
+    where p.id = auth.uid()
+      and p.rol in ('decano', 'superusuario')
+  )
+);
 
 create or replace function public.has_capability(cap capability_type)
 returns boolean

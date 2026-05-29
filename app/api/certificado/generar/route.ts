@@ -5,6 +5,12 @@ import { buildCertificadoPdf, type CertificadoTipo } from "@/lib/certificado/bui
 import { fetchDecanoOficioDestinatario } from "@/lib/certificado/fetch-decano-oficio";
 import { resolveSolicitanteCertificado } from "@/lib/certificado/resolve-solicitante";
 import { parseTipoPersonal } from "@/lib/certificado/tipo-personal";
+import {
+  mergeCertificadoConAnexo,
+  mimeAnexoFromFile,
+  validarAnexoObligatorio,
+  validarAnexoOpcional
+} from "@/lib/certificado/merge-pdf-anexos";
 
 export const runtime = "nodejs";
 
@@ -14,6 +20,30 @@ function isTipo(v: unknown): v is CertificadoTipo {
   return typeof v === "string" && (TIPOS as string[]).includes(v);
 }
 
+type Payload = {
+  tipo?: unknown;
+  fecha_inicio?: unknown;
+  fecha_fin?: unknown;
+  motivo?: unknown;
+  detalle?: unknown;
+  solicitante_nombres?: unknown;
+  solicitante_apellidos?: unknown;
+  tipo_personal?: unknown;
+};
+
+async function parsePayload(req: Request): Promise<{ payload: Payload; anexo: File | null }> {
+  const contentType = req.headers.get("content-type") ?? "";
+  if (contentType.includes("multipart/form-data")) {
+    const fd = await req.formData();
+    const raw = fd.get("payload");
+    const payload = typeof raw === "string" ? (JSON.parse(raw) as Payload) : ({} as Payload);
+    const anexo = fd.get("anexo");
+    return { payload, anexo: anexo instanceof File && anexo.size > 0 ? anexo : null };
+  }
+  const payload = (await req.json()) as Payload;
+  return { payload, anexo: null };
+}
+
 export async function POST(req: Request) {
   const supabase = createSupabaseRouteHandlerClient();
   const {
@@ -21,16 +51,7 @@ export async function POST(req: Request) {
   } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "No autenticado." }, { status: 401 });
 
-  const body = (await req.json()) as {
-    tipo?: unknown;
-    fecha_inicio?: unknown;
-    fecha_fin?: unknown;
-    motivo?: unknown;
-    detalle?: unknown;
-    solicitante_nombres?: unknown;
-    solicitante_apellidos?: unknown;
-    tipo_personal?: unknown;
-  };
+  const { payload: body, anexo } = await parsePayload(req);
 
   if (!isTipo(body.tipo)) return NextResponse.json({ error: "Tipo inválido." }, { status: 400 });
 
@@ -42,6 +63,13 @@ export async function POST(req: Request) {
   if (!fecha_inicio || !fecha_fin || !motivo.trim()) {
     return NextResponse.json({ error: "Faltan campos obligatorios." }, { status: 400 });
   }
+
+  const anexoErr =
+    validarAnexoObligatorio(
+      body.tipo,
+      anexo ? { size: anexo.size, type: anexo.type, name: anexo.name } : null
+    ) ?? validarAnexoOpcional(anexo ? { size: anexo.size, type: anexo.type, name: anexo.name } : null);
+  if (anexoErr) return NextResponse.json({ error: anexoErr }, { status: 400 });
 
   const fechaIniErr = validateFechaInicioMaxTresMeses(fecha_inicio);
   if (fechaIniErr) return NextResponse.json({ error: fechaIniErr }, { status: 400 });
@@ -75,7 +103,7 @@ export async function POST(req: Request) {
   const detalleConPersonal = { ...detalle, tipo_personal: tipoPersonal };
 
   const destinatario = await fetchDecanoOficioDestinatario();
-  const { buffer: pdf, source } = await buildCertificadoPdf(
+  let { buffer: pdf, source } = await buildCertificadoPdf(
     {
       solicitante: { nombres: solicitante.nombres, apellidos: solicitante.apellidos, email: solicitante.email },
       tipo: body.tipo,
@@ -87,6 +115,12 @@ export async function POST(req: Request) {
     },
     destinatario
   );
+
+  if (anexo) {
+    const mime = mimeAnexoFromFile(anexo);
+    const anexoBuf = Buffer.from(await anexo.arrayBuffer());
+    pdf = await mergeCertificadoConAnexo(pdf, anexoBuf, mime);
+  }
 
   return new NextResponse(pdf, {
     status: 200,

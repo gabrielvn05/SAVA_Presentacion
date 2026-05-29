@@ -35,6 +35,7 @@ export default async function SolicitudDetallePage({ params }: Readonly<{ params
   const justificativoUrl = hasJustificativo
     ? `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/justificativos/${data.justificativo_path}`
     : null;
+  const justificativoEsPdf = Boolean(data.justificativo_nombre?.toLowerCase().endsWith(".pdf"));
   const tipoLabel =
     data.tipo === "permiso"
       ? "Permiso"
@@ -105,10 +106,18 @@ export default async function SolicitudDetallePage({ params }: Readonly<{ params
             <div>{data.motivo}</div>
           </div>
           <div className="motivo-box">
-            <label>Detalle estructurado</label>
+            <label>Documento PDF generado</label>
             <div>
-              {data.detalle && typeof data.detalle === "object" && data.detalle !== null && Object.keys(data.detalle as object).length > 0 ? (
-                <pre style={{ whiteSpace: "pre-wrap", margin: 0, fontSize: 12 }}>{JSON.stringify(data.detalle, null, 2)}</pre>
+              {hasJustificativo && justificativoUrl && justificativoEsPdf ? (
+                <iframe
+                  title="PDF de justificativo"
+                  src={justificativoUrl}
+                  style={{ width: "100%", height: 520, border: "1px solid var(--color-border)", borderRadius: 8 }}
+                />
+              ) : hasJustificativo && justificativoUrl ? (
+                <a href={justificativoUrl} target="_blank" rel="noopener noreferrer">
+                  Abrir documento adjunto
+                </a>
               ) : (
                 <span className="field-hint">—</span>
               )}

@@ -77,18 +77,29 @@ export async function getUserProfile(userId: string): Promise<UserProfile> {
   throw new Error(`No se pudo obtener el perfil del usuario (${details}).`);
 }
 
+export function roleGrantsCapability(rol: AppRole, capability: Capability): boolean {
+  return ROLE_DEFAULT_CAPABILITIES[rol].includes(capability);
+}
+
 export async function hasCapability(userId: string, capability: Capability): Promise<boolean> {
   const profile = await getUserProfile(userId);
-  if (ROLE_DEFAULT_CAPABILITIES[profile.rol].includes(capability)) return true;
+  if (roleGrantsCapability(profile.rol, capability)) return true;
 
-  const supabase = createSupabaseServerClient();
-  const { data, error } = await supabase
-    .from("user_capabilities")
-    .select("capability")
-    .eq("user_id", userId)
-    .eq("capability", capability)
-    .maybeSingle();
+  // El rol administrativo no tiene permisos elevados en BD; evita consultar user_capabilities (RLS recursivo).
+  if (profile.rol === "administrativo") return false;
 
-  if (error) return false;
-  return Boolean(data);
+  try {
+    const admin = createSupabaseAdminClient();
+    const { data, error } = await admin
+      .from("user_capabilities")
+      .select("capability")
+      .eq("user_id", userId)
+      .eq("capability", capability)
+      .maybeSingle();
+
+    if (error) return false;
+    return Boolean(data);
+  } catch {
+    return false;
+  }
 }

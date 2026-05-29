@@ -48,7 +48,15 @@ type LoginPageProps = Readonly<{
   searchParams: Record<string, string | string[] | undefined>;
 }>;
 
-export default function LoginPage({ searchParams }: LoginPageProps) {
+export default async function LoginPage({ searchParams }: LoginPageProps) {
+  const supabase = createSupabaseServerClient();
+  const {
+    data: { user }
+  } = await supabase.auth.getUser();
+  if (user) {
+    redirect("/dashboard");
+  }
+
   const hasError = searchParams.error === "1";
   const hasOAuthError = searchParams.error === "oauth";
   const solicitudOk = searchParams.solicitud === "ok";

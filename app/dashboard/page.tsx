@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { getUserProfile, hasCapability, requireAuth } from "@/lib/auth";
+import { getUserProfile, hasCapability, requireAuth, roleGrantsCapability } from "@/lib/auth";
 import { PageHeader } from "@/components/PageHeader";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
@@ -27,10 +27,15 @@ export default async function DashboardPage() {
     );
   }
 
-  const [puedeRevisar, puedeAprobar] = await Promise.all([
-    hasCapability(user.id, "revisar_solicitudes"),
-    hasCapability(user.id, "aprobar_solicitudes")
-  ]);
+  const esAdministrativo = profile.rol === "administrativo";
+  const puedeRevisar = esAdministrativo
+    ? false
+    : roleGrantsCapability(profile.rol, "revisar_solicitudes") ||
+      (await hasCapability(user.id, "revisar_solicitudes"));
+  const puedeAprobar = esAdministrativo
+    ? false
+    : roleGrantsCapability(profile.rol, "aprobar_solicitudes") ||
+      (await hasCapability(user.id, "aprobar_solicitudes"));
 
   const esStaffInstitucional = profile.rol === "secretaria" || profile.rol === "decano";
   const db = esStaffInstitucional ? createSupabaseAdminClient() : createSupabaseServerClient();

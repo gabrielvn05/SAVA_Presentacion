@@ -8,7 +8,7 @@ import { PaginationControls } from "@/components/PaginationControls";
 import { StatusBadge } from "@/components/StatusBadge";
 import { labelTipoSolicitud } from "@/lib/solicitud-tipo-labels";
 import type { ProcesoEstadoFiltro, SolicitudFiltros, SolicitudListRow } from "@/lib/solicitudes-filters";
-import { facultadFromDetalle, nombreSolicitante, rowMatchesSolicitudFilters } from "@/lib/solicitudes-filters";
+import { nombreSolicitante, rolFromSolicitud, rowMatchesSolicitudFilters } from "@/lib/solicitudes-filters";
 
 const PAGE_SIZE = 10;
 
@@ -22,7 +22,7 @@ const ESTADOS_PROCESO: ReadonlyArray<{ value: ProcesoEstadoFiltro; label: string
 ];
 
 function emptyFilters(): SolicitudFiltros {
-  return { nombre: "", facultad: "", fechaDesde: "", fechaHasta: "", estado: "" };
+  return { nombre: "", rol: "", fechaDesde: "", fechaHasta: "", estado: "" };
 }
 
 type Props = Readonly<{
@@ -68,12 +68,12 @@ export function ProcesoSolicitudesFilterTable({ rows, puedeRevisar, puedeAprobar
             />
           </div>
           <div>
-            <label htmlFor="pf-fac">Facultad / unidad</label>
+            <label htmlFor="pf-rol">Rol</label>
             <input
-              id="pf-fac"
-              value={f.facultad}
-              onChange={(e) => setF((p) => ({ ...p, facultad: e.target.value }))}
-              placeholder="Desde detalle de la solicitud"
+              id="pf-rol"
+              value={f.rol}
+              onChange={(e) => setF((p) => ({ ...p, rol: e.target.value }))}
+              placeholder="Ej. Docente, Administrativo..."
             />
           </div>
           <div>
@@ -122,7 +122,7 @@ export function ProcesoSolicitudesFilterTable({ rows, puedeRevisar, puedeAprobar
                 <th>Tipo</th>
                 <th>Periodo</th>
                 <th>Estado</th>
-                <th>Facultad</th>
+                <th>Rol</th>
                 <th>Motivo</th>
                 <th>Justificativo</th>
                 <th>Acciones</th>
@@ -149,7 +149,7 @@ export function ProcesoSolicitudesFilterTable({ rows, puedeRevisar, puedeAprobar
                       <StatusBadge estado={s.estado} />
                     </td>
                     <td>
-                      <span className="text-truncate">{facultadFromDetalle(s) || "—"}</span>
+                      <span className="text-truncate">{rolFromSolicitud(s) || "—"}</span>
                     </td>
                     <td>
                       <span className="text-truncate">{s.motivo}</span>

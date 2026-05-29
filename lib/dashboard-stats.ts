@@ -1,5 +1,6 @@
 import { ESTADO_LABELS } from "@/lib/estados";
 import { labelTipoSolicitud } from "@/lib/solicitud-tipo-labels";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 export type DashboardSegment = {
@@ -47,6 +48,28 @@ function pct(count: number, total: number) {
   return Math.round((count / total) * 1000) / 10;
 }
 
+function supabaseErrorMessage(error: unknown): string {
+  if (error && typeof error === "object" && "message" in error) {
+    const msg = (error as { message: unknown }).message;
+    if (typeof msg === "string" && msg.length > 0) return msg;
+  }
+  return "Error al consultar solicitudes.";
+}
+
+function isRlsRecursionError(message: string) {
+  return /stack depth limit exceeded/i.test(message);
+}
+
+async function loadSolicitudesRows(
+  db: SupabaseClient,
+  userId?: string
+): Promise<{ rows: { estado: unknown; tipo: unknown; created_at: unknown }[]; error: unknown }> {
+  let q = db.from("solicitudes").select("estado, tipo, created_at");
+  if (userId) q = q.eq("creado_por", userId);
+  const { data, error } = await q;
+  return { rows: data ?? [], error };
+}
+
 function buildSegments(
   rows: { key: string; label: string; count: number }[],
   total: number,
@@ -67,21 +90,30 @@ export async function fetchDashboardStats(
   db: SupabaseClient,
   options: { userId?: string; includeAccountRequests?: boolean } = {}
 ): Promise<DashboardStats> {
-  let query = db.from("solicitudes").select("estado, tipo, created_at");
-  if (options.userId) {
-    query = query.eq("creado_por", options.userId);
+  let { rows, error } = await loadSolicitudesRows(db, options.userId);
+
+  if (error) {
+    const message = supabaseErrorMessage(error);
+    if (isRlsRecursionError(message)) {
+      const admin = createSupabaseAdminClient();
+      const retry = await loadSolicitudesRows(admin, options.userId);
+      rows = retry.rows;
+      error = retry.error;
+    }
+    if (error) {
+      const finalMessage = supabaseErrorMessage(error);
+      if (isRlsRecursionError(finalMessage)) {
+        throw new Error(
+          "Error de permisos en la base de datos (recursión RLS). Ejecuta en Supabase el script sql/supabase-hotfix-rls-y-detalle.sql."
+        );
+      }
+      throw new Error(finalMessage);
+    }
   }
 
-  const [{ data: solicitudes, error }, accountRequestsResult] = await Promise.all([
-    query,
-    options.includeAccountRequests
-      ? db.from("account_requests").select("status").eq("status", "pendiente")
-      : Promise.resolve({ data: null, error: null })
-  ]);
-
-  if (error) throw new Error(error.message);
-
-  const rows = solicitudes ?? [];
+  const accountRequestsResult = await (options.includeAccountRequests
+    ? db.from("account_requests").select("status").eq("status", "pendiente")
+    : Promise.resolve({ data: null, error: null }));
   const total = rows.length;
 
   const estadoCounts = new Map<string, number>();
